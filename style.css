@@ -201,3 +201,50 @@ nav a .feather {
     height: 24px;
     margin-bottom: 4px;
 }
+
+.main-content {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto; /* Allows content to scroll in portrait */
+}
+
+/* Landscape mode for iPad Mini (1024x768) and similar devices */
+@media (orientation: landscape) and (min-width: 768px) {
+    .container {
+        max-width: none;
+        max-height: none;
+        border-radius: 0;
+        box-shadow: none;
+    }
+
+    .main-content {
+        flex-direction: row;
+        overflow: hidden; /* Hide main scrollbar, children will scroll */
+    }
+
+    .player {
+        width: 480px;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        border-right: 1px solid var(--divider-color);
+    }
+
+    #playlist {
+        flex-grow: 1;
+        padding: 20px 30px;
+        overflow-y: auto; /* Allow playlist to scroll independently */
+    }
+
+    footer {
+        position: fixed;
+        bottom: 0;
+        width: 100%;
+        max-width: 1024px; /* Match iPad landscape width */
+        left: 50%;
+        transform: translateX(-50%);
+        background-color: var(--background-color);
+    }
+}
