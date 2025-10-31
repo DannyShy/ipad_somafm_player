@@ -10,20 +10,53 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <meta name="apple-mobile-web-app-title" content="SomaFM">
     <link rel="apple-touch-icon" href="icons/icon-152x152.png">
+    <script src="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.js"></script>
 </head>
 <body>
     <div class="container">
-        <div id="hls_player">
-            <h1>Groove Salad</h1>
-            <audio controls autoplay>
-                <source src="https://hls.somafm.com/hls/groovesalad/FLAC/program.m3u8" type="application/x-mpegURL">
-            </audio>
-        </div>
-        <div id="playlist">
-            <h2>Recently Played</h2>
+        <header>
+            <h1 class="station-title">Groove Salad Classic</h1>
+            <i data-feather="share-2"></i>
+        </header>
+
+        <main class="player">
+            <div class="track-info">
+                <h2 id="track-title">Loading...</h2>
+                <p id="track-artist">-</p>
+            </div>
+
+            <div class="progress-bar">
+                <div class="time-start">0:00</div>
+                <div class="progress"><div class="progress-filled"></div></div>
+                <div class="time-end">0:00</div>
+            </div>
+
+            <div class="controls">
+                <button class="control-btn"><i data-feather="rewind"></i></button>
+                <button class="control-btn play-btn"><i data-feather="play"></i></button>
+                <button class="control-btn"><i data-feather="fast-forward"></i></button>
+                <button class="control-btn volume-btn"><i data-feather="volume-2"></i></button>
+            </div>
+        </main>
+
+        <section id="playlist">
+            <h3>Up Next & History</h3>
             <div id="playlist-content"></div>
-        </div>
+        </section>
+
+        <footer>
+            <nav>
+                <a href="#" class="active"><i data-feather="home"></i><span>Home</span></a>
+                <a href="#"><i data-feather="radio"></i><span>Stations</span></a>
+                <a href="#"><i data-feather="settings"></i><span>Settings</span></a>
+            </nav>
+        </footer>
+
+        <audio id="audio-player" style="display: none;">
+            <source src="https://hls.somafm.com/hls/groovesalad/FLAC/program.m3u8" type="application/x-mpegURL">
+        </audio>
     </div>
+
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <script src="app.js"></script>
 </body>

@@ -1,64 +1,98 @@
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-            .then(registration => {
-                console.log('ServiceWorker registration successful with scope: ', registration.scope);
-            })
-            .catch(error => {
-                console.log('ServiceWorker registration failed: ', error);
-            });
-    });
-}
+document.addEventListener('DOMContentLoaded', () => {
+    // Service Worker Registration
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js')
+                .then(registration => console.log('SW registered: ', registration))
+                .catch(registrationError => console.log('SW registration failed: ', registrationError));
+        });
+    }
 
-document.addEventListener('DOMContentLoaded', function () {
-    const audio = document.querySelector('audio');
-    const source = audio.querySelector('source');
-    const streamUrl = source.getAttribute('src');
+    // Feather Icons
+    feather.replace();
 
+    // Player Elements
+    const audio = document.getElementById('audio-player');
+    const playBtn = document.querySelector('.play-btn');
+    const playIcon = playBtn.querySelector('i');
+    const trackTitle = document.getElementById('track-title');
+    const trackArtist = document.getElementById('track-artist');
+    const playlistContent = document.getElementById('playlist-content');
+
+    const streamUrl = audio.querySelector('source').getAttribute('src');
+
+    // HLS.js Setup
     if (Hls.isSupported()) {
         const hls = new Hls();
         hls.loadSource(streamUrl);
         hls.attachMedia(audio);
-        hls.on(Hls.Events.MANIFEST_PARSED, function () {
-            audio.play();
-        });
     } else if (audio.canPlayType('application/vnd.apple.mpegurl')) {
         audio.src = streamUrl;
-        audio.addEventListener('loadedmetadata', function () {
-            audio.play();
-        });
     }
 
-    const playlistContent = document.getElementById('playlist-content');
+    // Player Controls
+    let isPlaying = false;
+
+    function togglePlay() {
+        isPlaying ? audio.pause() : audio.play();
+    }
+
+    audio.addEventListener('play', () => {
+        isPlaying = true;
+        playIcon.setAttribute('data-feather', 'pause');
+        feather.replace();
+    });
+
+    audio.addEventListener('pause', () => {
+        isPlaying = false;
+        playIcon.setAttribute('data-feather', 'play');
+        feather.replace();
+    });
+
+    playBtn.addEventListener('click', togglePlay);
+
+    // Fetch and Display Playlist
     const playlistUrl = 'https://somafm.com/songs/groovesalad.xml';
+    const proxyUrl = 'https://cors-anywhere.herokuapp.com/'; // Proxy to avoid CORS issues
 
     function fetchPlaylist() {
-        // Use a proxy to avoid CORS issues if running locally
-        const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
         fetch(proxyUrl + playlistUrl)
             .then(response => response.text())
             .then(str => new window.DOMParser().parseFromString(str, "text/xml"))
             .then(data => {
-                playlistContent.innerHTML = ''; // Clear previous list
-                const songs = data.querySelectorAll('song');
-                songs.forEach(song => {
+                const songs = Array.from(data.querySelectorAll('song'));
+                
+                // Update current track info (first song in the list)
+                if (songs.length > 0) {
+                    const currentSong = songs[0];
+                    trackTitle.textContent = currentSong.querySelector('title').textContent;
+                    trackArtist.textContent = currentSong.querySelector('artist').textContent;
+                }
+
+                // Update playlist history (the rest of the songs)
+                playlistContent.innerHTML = '';
+                const historySongs = songs.slice(1, 5); // Display next 4 songs
+                historySongs.forEach(song => {
                     const title = song.querySelector('title').textContent;
                     const artist = song.querySelector('artist').textContent;
                     const songElement = document.createElement('div');
                     songElement.classList.add('song');
                     songElement.innerHTML = `
-                        <div class="song-title">${title}</div>
-                        <div class="song-artist">${artist}</div>
+                        <div class="song-info">
+                            <div class="song-title">${title}</div>
+                            <div class="song-artist">${artist}</div>
+                        </div>
                     `;
                     playlistContent.appendChild(songElement);
                 });
             })
             .catch(error => {
                 console.error('Error fetching playlist:', error);
-                playlistContent.innerHTML = '<p>Could not load playlist.</p>';
+                trackTitle.textContent = 'Error';
+                trackArtist.textContent = 'Could not load playlist.';
             });
     }
 
     fetchPlaylist();
-    setInterval(fetchPlaylist, 20000); // Update every 20 seconds
+    setInterval(fetchPlaylist, 15000); // Update every 15 seconds
 });
