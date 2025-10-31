@@ -35,6 +35,8 @@ body {
     box-shadow: 0 10px 30px rgba(0,0,0,0.1);
     overflow: hidden;
     border-radius: 20px;
+    padding-bottom: constant(safe-area-inset-bottom); /* For iOS home indicator */
+    padding-bottom: env(safe-area-inset-bottom);
 }
 
 header {
@@ -42,6 +44,8 @@ header {
     justify-content: space-between;
     align-items: center;
     padding: 20px;
+    padding-top: calc(20px + constant(safe-area-inset-top)); /* For iOS notch/status bar */
+    padding-top: calc(20px + env(safe-area-inset-top));
     border-bottom: 1px solid var(--divider-color);
 }
 
