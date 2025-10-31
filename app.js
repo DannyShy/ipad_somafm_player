@@ -14,7 +14,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Player Elements
     const audio = document.getElementById('audio-player');
     const playBtn = document.querySelector('.play-btn');
-    const playIcon = playBtn.querySelector('i');
+    const playIcon = document.querySelector('.play-icon');
+    const pauseIcon = document.querySelector('.pause-icon');
     const trackTitle = document.getElementById('track-title');
     const trackArtist = document.getElementById('track-artist');
     const playlistContent = document.getElementById('playlist-content');
@@ -31,33 +32,37 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Player Controls
-    let isPlaying = false;
-
     function togglePlay() {
-        isPlaying ? audio.pause() : audio.play();
+        if (audio.paused) {
+            audio.play();
+        } else {
+            audio.pause();
+        }
     }
 
     audio.addEventListener('play', () => {
-        isPlaying = true;
-        playIcon.setAttribute('data-feather', 'pause');
-        feather.replace();
+        playIcon.style.display = 'none';
+        pauseIcon.style.display = 'block';
     });
 
     audio.addEventListener('pause', () => {
-        isPlaying = false;
-        playIcon.setAttribute('data-feather', 'play');
-        feather.replace();
+        playIcon.style.display = 'block';
+        pauseIcon.style.display = 'none';
     });
 
     playBtn.addEventListener('click', togglePlay);
 
     // Fetch and Display Playlist
     const playlistUrl = 'https://somafm.com/songs/groovesalad.xml';
-    const proxyUrl = 'https://cors-anywhere.herokuapp.com/'; // Proxy to avoid CORS issues
 
     function fetchPlaylist() {
-        fetch(proxyUrl + playlistUrl)
-            .then(response => response.text())
+        fetch(playlistUrl)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.text();
+            })
             .then(str => new window.DOMParser().parseFromString(str, "text/xml"))
             .then(data => {
                 const songs = Array.from(data.querySelectorAll('song'));
