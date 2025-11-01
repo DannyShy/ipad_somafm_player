@@ -1,10 +1,10 @@
 :root {
-    --primary-text: #212121;
-    --secondary-text: #757575;
+    --primary-text: #FFFFFF;
+    --secondary-text: #BDBDBD;
     --accent-color: #00BCD4; 
-    --divider-color: #E0E0E0;
-    --background-color: #FFFFFF;
-    --background-light: #F5F5F5;
+    --divider-color: #424242;
+    --background-color: #212121;
+    --background-light: #121212;
 }
 
 * {

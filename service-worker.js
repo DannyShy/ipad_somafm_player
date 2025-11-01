@@ -1,4 +1,4 @@
-const CACHE_NAME = 'somafm-player-cache-v1';
+const CACHE_NAME = 'somafm-player-cache-v2'; // zmen v1 na v2 a vyssie, pri kazdom update
 const urlsToCache = [
   '/',
   '/index.html',
