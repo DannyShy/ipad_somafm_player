@@ -251,3 +251,84 @@ nav a .feather {
         max-width: none;
     }
 }
+
+/* Station Selector Modal */
+.station-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.station-modal-content {
+    background-color: var(--background-color);
+    border-radius: 12px;
+    padding: 30px;
+    max-width: 400px;
+    width: 90%;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+
+.station-modal-content h2 {
+    margin: 0 0 20px 0;
+    font-size: 24px;
+    color: var(--primary-text);
+}
+
+.station-list {
+    margin-bottom: 20px;
+}
+
+.station-item {
+    padding: 15px;
+    margin-bottom: 10px;
+    background-color: var(--background-light);
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: background-color 0.2s;
+}
+
+.station-item:hover {
+    background-color: var(--divider-color);
+}
+
+.station-item.active {
+    background-color: var(--accent-color);
+    color: var(--background-color);
+}
+
+.station-item span {
+    font-size: 16px;
+    font-weight: 500;
+}
+
+.station-item i {
+    width: 20px;
+    height: 20px;
+}
+
+.close-modal {
+    width: 100%;
+    padding: 12px;
+    background-color: var(--divider-color);
+    color: var(--primary-text);
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.close-modal:hover {
+    background-color: var(--secondary-text);
+}

@@ -2,6 +2,27 @@ document.addEventListener('DOMContentLoaded', () => {
     // Feather Icons
     feather.replace();
 
+    // Stations Configuration
+    const stations = [
+        {
+            id: 'groovesalad',
+            name: 'Groove Salad Classic',
+            streamUrl: 'https://hls.somafm.com/hls/gs-unprocessed/320k/program.m3u8',
+            playlistUrl: 'https://somafm.com/songs/groovesalad.xml'
+        },
+        {
+            id: 'cliqhop',
+            name: 'Cliqhop',
+            streamUrl: 'https://corsproxy.io/?https://ice1.somafm.com/cliqhop-128-aac',
+            playlistUrl: 'https://somafm.com/songs/cliqhop.xml'
+        }
+    ];
+
+    let currentStation = stations[0];
+    let hls = null;
+    let playlistInterval = null;
+    let isLoadingStation = false;
+
     // Player Elements
     const audio = document.getElementById('audio-player');
     const playBtn = document.querySelector('.play-btn');
@@ -13,23 +34,92 @@ document.addEventListener('DOMContentLoaded', () => {
     const trackTitle = document.getElementById('track-title');
     const trackArtist = document.getElementById('track-artist');
     const playlistContent = document.getElementById('playlist-content');
+    const stationTitle = document.querySelector('.station-title');
+    const stationsBtn = document.querySelectorAll('footer nav a')[1]; // Stations button
 
-    const streamUrl = audio.querySelector('source').getAttribute('src');
-
-    // HLS.js Setup
-    if (Hls.isSupported()) {
-        const hls = new Hls();
-        hls.loadSource(streamUrl);
-        hls.attachMedia(audio);
-        hls.on(Hls.Events.MANIFEST_PARSED, function () {
-            console.log('HLS stream loaded');
-        });
-    } else if (audio.canPlayType('application/vnd.apple.mpegurl')) {
-        audio.src = streamUrl;
+    // Function to load a station
+    // NOTE: Some SomaFM streams (direct MP3/AAC) require CORS proxy due to missing Access-Control-Allow-Origin headers
+    // HLS streams work directly, but direct streams need proxy like: https://corsproxy.io/?[stream-url]
+    function loadStation(station) {
+        isLoadingStation = true;
+        currentStation = station;
+        const wasPlaying = !audio.paused;
+        
+        // Update station title
+        stationTitle.textContent = station.name;
+        
+        // Stop current playback
+        audio.pause();
+        
+        // Destroy existing HLS instance if it exists
+        if (hls) {
+            hls.destroy();
+            hls = null;
+        }
+        
+        // Detect stream type
+        const isHLS = station.streamUrl.includes('.m3u8');
+        
+        // Remove all source elements first
+        const sources = audio.querySelectorAll('source');
+        sources.forEach(source => source.remove());
+        
+        // Clear the audio element
+        audio.removeAttribute('src');
+        
+        // Load new stream
+        if (isHLS && Hls.isSupported()) {
+            // Use HLS.js for HLS streams
+            hls = new Hls();
+            hls.loadSource(station.streamUrl);
+            hls.attachMedia(audio);
+            
+            hls.on(Hls.Events.MANIFEST_PARSED, function () {
+                isLoadingStation = false;
+                if (wasPlaying) {
+                    audio.play().catch(e => console.error('Play error:', e));
+                }
+            });
+            
+            hls.on(Hls.Events.ERROR, function (event, data) {
+                console.error('HLS Error:', data);
+            });
+        } else if (isHLS && audio.canPlayType('application/vnd.apple.mpegurl')) {
+            // Native HLS support (Safari)
+            audio.src = station.streamUrl;
+            audio.load();
+            isLoadingStation = false;
+            if (wasPlaying) {
+                audio.play().catch(e => console.error('Play error:', e));
+            }
+        } else {
+            // Direct MP3/AAC stream
+            audio.src = station.streamUrl;
+            audio.load();
+            isLoadingStation = false;
+            
+            if (wasPlaying) {
+                audio.play().catch(e => console.error('Play error:', e));
+            }
+        }
+        
+        // Clear and restart playlist fetching
+        if (playlistInterval) {
+            clearInterval(playlistInterval);
+        }
+        fetchPlaylist();
+        playlistInterval = setInterval(fetchPlaylist, 30000);
     }
+    
+    // Initialize with first station
+    loadStation(currentStation);
 
     // Play/Stop Controls
     function togglePlay() {
+        if (isLoadingStation) {
+            return; // Wait for station to finish loading
+        }
+        
         if (audio.paused) {
             audio.play().catch(e => console.error('Play error:', e));
         } else {
@@ -49,7 +139,11 @@ document.addEventListener('DOMContentLoaded', () => {
         stopIcon.style.display = 'none';
         feather.replace();
     });
-
+    
+    audio.addEventListener('error', (e) => {
+        console.error('Audio error:', audio.error ? audio.error.code : 'unknown');
+    });
+    
     playBtn.addEventListener('click', togglePlay);
 
     // Volume/Mute Controls
@@ -71,83 +165,98 @@ document.addEventListener('DOMContentLoaded', () => {
 
     volumeBtn.addEventListener('click', toggleMute);
 
-    // Fetch and Display Playlist
-    const playlistUrl = 'https://somafm.com/songs/groovesalad.xml';
-
-    function fetchPlaylist() {
-        console.log('Fetching playlist...');
-        fetch(playlistUrl, {
-            mode: 'cors',
-            cache: 'no-cache'
-        })
-            .then(response => {
-                console.log('Response status:', response.status);
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                return response.text();
-            })
-            .then(str => {
-                console.log('XML received, parsing...');
-                const parser = new DOMParser();
-                const xmlDoc = parser.parseFromString(str, "text/xml");
-                
-                // Check for parsing errors
-                const parserError = xmlDoc.querySelector('parsererror');
-                if (parserError) {
-                    throw new Error('XML parsing error');
-                }
-                
-                const songs = Array.from(xmlDoc.querySelectorAll('song'));
-                console.log('Found songs:', songs.length);
-                
-                if (songs.length === 0) {
-                    throw new Error('No songs found in XML');
-                }
-                
-                // Update current track info (first song in the list is currently playing)
+    // Fetch and display playlist
+    async function fetchPlaylist() {
+        try {
+            const response = await fetch(currentStation.playlistUrl);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const xmlText = await response.text();
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+            
+            const songs = xmlDoc.querySelectorAll('song');
+            
+            // Get current track (first song)
+            if (songs.length > 0) {
                 const currentSong = songs[0];
-                const currentTitle = currentSong.querySelector('title');
-                const currentArtist = currentSong.querySelector('artist');
-                
-                if (currentTitle && currentArtist) {
-                    trackTitle.textContent = currentTitle.textContent;
-                    trackArtist.textContent = currentArtist.textContent;
-                    console.log('Current track:', currentTitle.textContent, '-', currentArtist.textContent);
-                }
-
-                // Update playlist history (show 10 songs that already played)
-                playlistContent.innerHTML = '';
-                const historySongs = songs.slice(1, 11); // Get songs 1-10 (skip the current one)
-                
-                historySongs.forEach((song, index) => {
-                    const title = song.querySelector('title');
-                    const artist = song.querySelector('artist');
-                    
-                    if (title && artist) {
-                        const songElement = document.createElement('div');
-                        songElement.classList.add('song');
-                        songElement.innerHTML = `
-                            <div class="song-info">
-                                <div class="song-title">${title.textContent}</div>
-                                <div class="song-artist">${artist.textContent}</div>
-                            </div>
-                        `;
-                        playlistContent.appendChild(songElement);
-                    }
-                });
-                
-                console.log('Playlist updated with', historySongs.length, 'songs');
-            })
-            .catch(error => {
-                console.error('Error fetching playlist:', error);
-                trackTitle.textContent = 'Groove Salad Classic';
-                trackArtist.textContent = 'Loading playlist...';
-                playlistContent.innerHTML = '<p style="padding: 20px; color: #999;">Unable to load playlist. Please check your connection.</p>';
-            });
+                const title = currentSong.querySelector('title')?.textContent || 'Unknown Track';
+                const artist = currentSong.querySelector('artist')?.textContent || 'Unknown Artist';
+                trackTitle.textContent = `${title} - ${artist}`;
+            }
+            
+            // Display last 10 songs (history)
+            const playlistItems = Array.from(songs).slice(0, 10).map(song => {
+                const title = song.querySelector('title')?.textContent || 'Unknown Track';
+                const artist = song.querySelector('artist')?.textContent || 'Unknown Artist';
+                return `
+                    <div class="playlist-item">
+                        <div class="song-title">${title}</div>
+                        <div class="song-artist">${artist}</div>
+                    </div>
+                `;
+            }).join('');
+            
+            playlistContent.innerHTML = playlistItems;
+        } catch (error) {
+            console.error('Error fetching playlist:', error);
+            trackTitle.textContent = currentStation.name;
+            playlistContent.innerHTML = '<p style="padding: 20px; color: #999;">Unable to load playlist.</p>';
+        }
     }
 
-    // Initial fetch and periodic updates
-    fetchPlaylist();
-    setInterval(fetchPlaylist, 30000); // Update every 30 seconds
+    // Station Selector Modal
+    function showStationModal() {
+        // Create modal overlay
+        const modal = document.createElement('div');
+        modal.className = 'station-modal';
+        modal.innerHTML = `
+            <div class="station-modal-content">
+                <h2>Select Station</h2>
+                <div class="station-list">
+                    ${stations.map(station => `
+                        <div class="station-item ${station.id === currentStation.id ? 'active' : ''}" data-station-id="${station.id}">
+                            <span>${station.name}</span>
+                            ${station.id === currentStation.id ? '<i data-feather="check"></i>' : ''}
+                        </div>
+                    `).join('')}
+                </div>
+                <button class="close-modal">Close</button>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        feather.replace();
+        
+        // Add event listeners
+        modal.querySelector('.close-modal').addEventListener('click', () => {
+            modal.remove();
+        });
+        
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.remove();
+            }
+        });
+        
+        modal.querySelectorAll('.station-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const stationId = item.dataset.stationId;
+                const station = stations.find(s => s.id === stationId);
+                if (station && station.id !== currentStation.id) {
+                    loadStation(station);
+                }
+                modal.remove();
+            });
+        });
+    }
+    
+    // Add click handler to Stations button
+    stationsBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        showStationModal();
+    });
 });
