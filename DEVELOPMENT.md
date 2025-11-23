@@ -104,6 +104,69 @@ if (Hls.isSupported()) {
 - Horizontal layout: Player (45%) | Playlist (55%)
 - Optimized for iPad Mini (1024x768)
 
+### Playlist Layout Dimensions (iPad Mini 2 Landscape)
+
+**Critical: These dimensions ensure all 10 songs are visible without scrolling**
+
+#### Screen & Layout Calculations
+```
+iPad Mini 2 Resolution: 1024px × 768px (landscape)
+
+Layout Breakdown:
+├─ Header:           ~60px  (20px padding + title + border)
+├─ Main Content:     ~638px (calculated below)
+└─ Footer:           ~70px  (navigation bar)
+
+Main Content Split (landscape):
+├─ Player (left):    45% width = 460px
+└─ Playlist (right): 55% width = 564px
+
+Playlist Available Height:
+638px (main-content) - 30px (padding top+bottom) = 608px
+608px ÷ 10 songs = ~60px per song
+```
+
+#### Perfect Playlist CSS Values
+```css
+#playlist {
+    padding: 15px 20px;        /* Reduced from 20px to maximize space */
+    overflow: hidden;          /* NO scrolling - all 10 songs must fit */
+}
+
+#playlist-content {
+    flex: 1;                   /* Fill available space */
+    justify-content: space-around; /* Equal distribution */
+}
+
+.playlist-item {
+    flex: 1;                   /* Each song gets equal height (~60px) */
+    padding: 8px 0;            /* Vertical spacing */
+}
+
+.song-title {
+    font-size: 14px;           /* Optimized for space */
+    line-height: 1.3;          /* Tight line spacing */
+    margin-bottom: 3px;
+}
+
+.song-artist {
+    font-size: 12px;           /* Smaller than title */
+    line-height: 1.3;
+}
+```
+
+#### Why These Values Work
+- **Total per song**: ~60px (8px padding + ~32px text + ~20px flex space)
+- **10 songs**: 60px × 10 = 600px (fits in 608px available)
+- **No overflow**: All songs visible, no scrolling needed
+- **Equal spacing**: `flex: 1` ensures perfect distribution
+
+#### ⚠️ DO NOT CHANGE:
+- Padding values (will break fit)
+- Font sizes (will cause overflow)
+- Line heights (will add unwanted space)
+- `overflow: hidden` (scrolling defeats the purpose)
+
 ### Safe Areas (iOS)
 ```css
 padding-top: env(safe-area-inset-top);     /* Notch */
