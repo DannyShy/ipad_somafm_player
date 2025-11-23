@@ -185,7 +185,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const currentSong = songs[0];
                 const title = currentSong.querySelector('title')?.textContent || 'Unknown Track';
                 const artist = currentSong.querySelector('artist')?.textContent || 'Unknown Artist';
-                trackTitle.textContent = `${title} - ${artist}`;
+                trackTitle.textContent = title;
+                trackArtist.textContent = artist;
             }
             
             // Display last 10 songs (history)

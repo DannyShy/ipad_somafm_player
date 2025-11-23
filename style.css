@@ -59,14 +59,21 @@ header {
     text-align: center;
 }
 
+.track-info {
+    margin-bottom: 30px;
+    text-align: center;
+}
+
 .track-info h2 {
-    font-size: 28px;
+    font-size: 32px;
     font-weight: 700;
-    margin-bottom: 8px;
+    margin-bottom: 10px;
+    line-height: 1.2;
 }
 
 .track-info p {
-    font-size: 18px;
+    font-size: 20px;
+    font-weight: 400;
     color: var(--secondary-text);
 }
 
@@ -146,34 +153,38 @@ header {
 
 #playlist {
     flex-grow: 1;
-    padding: 0 20px;
+    padding: 20px;
     overflow-y: auto;
-}
-
-#playlist h3 {
-    font-size: 16px;
-    font-weight: 600;
-    margin-bottom: 15px;
-}
-
-.song {
     display: flex;
-    align-items: center;
-    gap: 15px;
-    padding: 10px 0;
+    flex-direction: column;
+    justify-content: space-between;
 }
 
-.song-info {
-    flex-grow: 1;
+#playlist-content {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
+    height: 100%;
+}
+
+.playlist-item {
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.playlist-item:last-child {
+    border-bottom: none;
 }
 
 .song-title {
     font-weight: 500;
+    font-size: 15px;
     color: var(--primary-text);
+    margin-bottom: 4px;
 }
 
 .song-artist {
-    font-size: 14px;
+    font-size: 13px;
     color: var(--secondary-text);
 }
 
