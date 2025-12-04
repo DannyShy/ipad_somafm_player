@@ -1,4 +1,4 @@
-const CACHE_NAME = 'somafm-player-cache-v5'; // zmen v1 na v2 a vyssie, pri kazdom update
+const CACHE_NAME = 'somafm-player-cache-v6'; // zmen v1 na v2 a vyssie, pri kazdom update
 const urlsToCache = [
   '/',
   '/index.html',
@@ -22,6 +22,15 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  // Don't cache streaming requests or playlist API calls
+  if (event.request.url.includes('.m3u8') ||
+      event.request.url.includes('somafm.com') ||
+      event.request.url.includes('corsproxy.io')) {
+    // Always fetch streaming requests from network
+    return fetch(event.request);
+  }
+  
+  // Use cache-first for static assets
   event.respondWith(
     caches.match(event.request)
       .then((response) => {

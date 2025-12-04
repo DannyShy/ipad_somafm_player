@@ -22,6 +22,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let hls = null;
     let playlistInterval = null;
     let isLoadingStation = false;
+    let healthCheckInterval = null;
+    let memoryCleanupInterval = null;
 
     // Player Elements
     const audio = document.getElementById('audio-player');
@@ -69,8 +71,18 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Load new stream
         if (isHLS && Hls.isSupported()) {
-            // Use HLS.js for HLS streams
-            hls = new Hls();
+            // Use HLS.js for HLS streams with buffer management
+            hls = new Hls({
+                maxBufferLength: 30,        // Max 30 seconds buffer
+                maxMaxBufferLength: 600,    // Absolute max 10 minutes
+                maxBufferSize: 60 * 1000 * 1000,  // 60MB max buffer
+                maxBufferHole: 0.5,        // Max buffer hole duration
+                highBufferWatchdogPeriod: 2,  // Check buffer every 2 seconds
+                nudgeOffset: 0.1,           // Small nudge to keep stream alive
+                nudgeMaxRetry: 3,           // Max nudges before recovery
+                backBufferLength: 90        // Keep 90 seconds behind
+            });
+            
             hls.loadSource(station.streamUrl);
             hls.attachMedia(audio);
             
@@ -79,10 +91,51 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (wasPlaying) {
                     audio.play().catch(e => console.error('Play error:', e));
                 }
+                console.log('HLS manifest parsed successfully');
             });
             
             hls.on(Hls.Events.ERROR, function (event, data) {
                 console.error('HLS Error:', data);
+                
+                if (data.fatal) {
+                    switch(data.type) {
+                        case Hls.ErrorTypes.NETWORK_ERROR:
+                            console.log('Network error, attempting recovery...');
+                            try {
+                                hls.startLoad();
+                            } catch (e) {
+                                console.error('Failed to restart stream:', e);
+                                setTimeout(() => loadStation(station), 3000);
+                            }
+                            break;
+                        case Hls.ErrorTypes.MEDIA_ERROR:
+                            console.log('Media error, attempting recovery...');
+                            try {
+                                hls.recoverMediaError();
+                            } catch (e) {
+                                console.error('Media recovery failed:', e);
+                                setTimeout(() => loadStation(station), 3000);
+                            }
+                            break;
+                        default:
+                            console.error('Fatal error, reloading stream in 3 seconds');
+                            setTimeout(() => loadStation(station), 3000);
+                            break;
+                    }
+                }
+            });
+            
+            // Buffer monitoring
+            hls.on(Hls.Events.BUFFER_APPENDED, (event, data) => {
+                console.log('Buffer appended:', {
+                    duration: data.duration,
+                    size: data.size,
+                    buffered: audio.buffered.length
+                });
+            });
+            
+            hls.on(Hls.Events.BUFFER_EOS, () => {
+                console.log('End of stream reached');
             });
         } else if (isHLS && audio.canPlayType('application/vnd.apple.mpegurl')) {
             // Native HLS support (Safari)
@@ -109,10 +162,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         fetchPlaylist();
         playlistInterval = setInterval(fetchPlaylist, 30000);
+        
+        // Setup health check, memory management, and media session
+        setupHealthCheck();
+        setupMemoryManagement();
+        setupMediaSession();
     }
     
     // Initialize with first station
     loadStation(currentStation);
+    
+    // Setup performance monitoring once
+    setupPerformanceMonitoring();
 
     // Play/Stop Controls
     function togglePlay() {
@@ -206,6 +267,214 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Error fetching playlist:', error);
             trackTitle.textContent = currentStation.name;
             playlistContent.innerHTML = '<p style="padding: 20px; color: #999;">Unable to load playlist.</p>';
+        }
+    }
+
+    // Health Check Function
+    function setupHealthCheck() {
+        // Clear existing health check
+        if (healthCheckInterval) {
+            clearInterval(healthCheckInterval);
+        }
+        
+        healthCheckInterval = setInterval(() => {
+            if (!audio.paused && audio.readyState > 0) {
+                // Check if stream appears stalled
+                const currentTime = audio.currentTime;
+                const buffered = audio.buffered;
+                
+                // Log current state for debugging
+                console.log('Health check:', {
+                    paused: audio.paused,
+                    readyState: audio.readyState,
+                    currentTime: currentTime,
+                    bufferedRanges: buffered.length,
+                    networkState: audio.networkState
+                });
+                
+                // Check if we have buffered data but playback is stuck
+                if (buffered.length > 0) {
+                    const bufferedEnd = buffered.end(buffered.length - 1);
+                    const timeDiff = bufferedEnd - currentTime;
+                    
+                    // If we're more than 10 seconds behind buffer end, we might be stalled
+                    if (timeDiff > 10) {
+                        console.warn('Stream appears stalled, attempting recovery');
+                        console.log('Buffer end:', bufferedEnd, 'Current time:', currentTime, 'Diff:', timeDiff);
+                        
+                        // Try to nudge playback
+                        audio.currentTime = currentTime + 0.1;
+                        
+                        // If still stuck after 2 seconds, reload
+                        setTimeout(() => {
+                            if (audio.currentTime === currentTime) {
+                                console.log('Recovery nudge failed, reloading stream');
+                                loadStation(currentStation);
+                            }
+                        }, 2000);
+                    }
+                }
+                
+                // Check if we've lost connection completely
+                if (audio.networkState === HTMLMediaElement.NETWORK_NO_SOURCE) {
+                    console.warn('Network state indicates no source, reloading');
+                    loadStation(currentStation);
+                }
+            }
+        }, 60000); // Check every minute
+    }
+
+    // Memory Management Function
+    function setupMemoryManagement() {
+        // Clear existing memory cleanup
+        if (memoryCleanupInterval) {
+            clearInterval(memoryCleanupInterval);
+        }
+        
+        memoryCleanupInterval = setInterval(() => {
+            if (hls && hls.bufferController) {
+                // Log buffer status for debugging
+                const bufferInfo = {
+                    buffered: audio.buffered.length,
+                    currentTime: audio.currentTime,
+                    readyState: audio.readyState,
+                    networkState: audio.networkState
+                };
+                
+                // Get detailed buffer info if available
+                if (audio.buffered.length > 0) {
+                    bufferInfo.bufferStart = audio.buffered.start(0);
+                    bufferInfo.bufferEnd = audio.buffered.end(audio.buffered.length - 1);
+                    bufferInfo.bufferDuration = bufferInfo.bufferEnd - bufferInfo.bufferStart;
+                }
+                
+                console.log('Memory management check:', bufferInfo);
+                
+                // Force garbage collection hint if available
+                if (window.gc) {
+                    window.gc();
+                    console.log('Forced garbage collection');
+                }
+                
+                // If buffer is getting too large, trigger cleanup
+                if (bufferInfo.bufferDuration && bufferInfo.bufferDuration > 600) { // 10 minutes
+                    console.warn('Buffer size excessive, triggering cleanup');
+                    if (hls.bufferController) {
+                        try {
+                            hls.bufferController.flushBuffer();
+                        } catch (e) {
+                            console.error('Buffer flush failed:', e);
+                        }
+                    }
+                }
+            }
+        }, 300000); // Every 5 minutes
+    }
+
+    // iOS Media Session API for better background playback
+    function setupMediaSession() {
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: 'SomaFM Player',
+                artist: currentStation.name,
+                album: 'Internet Radio',
+                artwork: [
+                    { src: '/icons/icon-96x96.png', sizes: '96x96', type: 'image/png' },
+                    { src: '/icons/icon-128x128.png', sizes: '128x128', type: 'image/png' },
+                    { src: '/icons/icon-192x192.png', sizes: '192x192', type: 'image/png' },
+                    { src: '/icons/icon-256x256.png', sizes: '256x256', type: 'image/png' },
+                    { src: '/icons/icon-384x384.png', sizes: '384x384', type: 'image/png' },
+                    { src: '/icons/icon-512x512.png', sizes: '512x512', type: 'image/png' }
+                ]
+            });
+            
+            // Update media session when track changes
+            navigator.mediaSession.setActionHandler('play', () => {
+                audio.play().catch(e => console.error('Media session play error:', e));
+            });
+            
+            navigator.mediaSession.setActionHandler('pause', () => {
+                audio.pause();
+            });
+            
+            navigator.mediaSession.setActionHandler('stop', () => {
+                audio.pause();
+                audio.currentTime = 0;
+            });
+            
+            // Update metadata when station changes
+            if (trackTitle && trackArtist) {
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title: trackTitle.textContent,
+                    artist: trackArtist.textContent,
+                    album: currentStation.name
+                });
+            }
+        }
+    }
+
+    // Enhanced Performance Monitoring
+    function setupPerformanceMonitoring() {
+        // Monitor audio element events
+        audio.addEventListener('stalled', () => {
+            console.error('Audio stalled at:', audio.currentTime);
+        });
+        
+        audio.addEventListener('waiting', () => {
+            console.warn('Audio waiting for data at:', audio.currentTime);
+        });
+        
+        audio.addEventListener('seeking', () => {
+            console.log('Audio seeking to:', audio.currentTime);
+        });
+        
+        audio.addEventListener('seeked', () => {
+            console.log('Audio seeked to:', audio.currentTime);
+        });
+        
+        audio.addEventListener('progress', () => {
+            if (audio.buffered.length > 0) {
+                const bufferedEnd = audio.buffered.end(audio.buffered.length - 1);
+                const duration = audio.duration || 0;
+                const bufferedPercent = (bufferedEnd / duration) * 100;
+                
+                // Only log significant buffer changes
+                if (bufferedPercent % 10 < 1) {
+                    console.log(`Buffered: ${bufferedPercent.toFixed(1)}%`);
+                }
+            }
+        });
+        
+        // Monitor page visibility changes
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                console.log('Page hidden - stream may be throttled');
+            } else {
+                console.log('Page visible - checking stream health');
+                // Quick health check when page becomes visible
+                if (!audio.paused && audio.currentTime === 0) {
+                    console.warn('Stream stalled while page was hidden, recovering');
+                    loadStation(currentStation);
+                }
+            }
+        });
+        
+        // Monitor network connection
+        if ('connection' in navigator) {
+            const connection = navigator.connection;
+            console.log('Network connection:', {
+                effectiveType: connection.effectiveType,
+                downlink: connection.downlink,
+                rtt: connection.rtt
+            });
+            
+            connection.addEventListener('change', () => {
+                console.log('Network connection changed:', {
+                    effectiveType: connection.effectiveType,
+                    downlink: connection.downlink,
+                    rtt: connection.rtt
+                });
+            });
         }
     }
 
